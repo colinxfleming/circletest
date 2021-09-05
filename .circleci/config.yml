@@ -1,0 +1,51 @@
+# Empty
+version: 2
+
+jobs:
+  build:
+    parallelism: 4
+    working_directory: ~/abortioneering
+    docker:
+      - image: circleci/ruby:2.7.4-node-browsers
+        environment:
+          BUNDLE_JOBS: 3
+          BUNDLE_RETRY: 3
+          BUNDLE_PATH: vendor/bundle
+          RAILS_ENV: test
+          TESTOPTS: "--ci-dir=test-results"
+      - image: circleci/postgres:latest
+        environment:
+          POSTGRES_USER: circleci
+          POSTGRES_DB: dcaf_case_management_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+    steps:
+      - checkout
+      - run: sudo apt-get update
+      # - run: sudo apt-get install libfontconfig postgresql-client
+      - run: gem install bundler # Update bundler
+      - run: sudo gem update --system # Update rubygems
+      - restore_cache:
+          keys:
+            - bleh-{{ checksum "Gemfile.lock" }}
+            - bleh-{{ checksum ".circleci/config.yml" }}
+      - run: bundle check || bundle install
+      - run: yarn install
+      - run: NODE_ENV=test bundle exec rails assets:precompile
+      - run: RAILS_ENV=test bundle exec rails db:create db:migrate
+      - save_cache:
+          key: bleh-{{ checksum "Gemfile.lock" }}
+          paths:
+            - vendor/bundle
+      - run: bundle exec rails test:all -v
+      - store_artifacts:
+          path: /home/circleci/abortioneering/tmp/capybara/
+      - store_artifacts:
+          path: coverage
+      - store_test_results:
+          path: test-results/
+
+workflows:
+  version: 2
+  cats_workflow_build_test_deploy:
+    jobs:
+      - build
